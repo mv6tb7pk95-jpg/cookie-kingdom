@@ -1,7 +1,8 @@
-import type { BuildingDef, CharacterDef, SkillDef } from "@ck/shared";
+import type { BuildingDef, CharacterDef, SkillDef, StageDef } from "@ck/shared";
 import buildingsRaw from "../../../data/buildings.json";
 import charactersRaw from "../../../data/characters.json";
 import skillsRaw from "../../../data/skills.json";
+import stagesRaw from "../../../data/stages.json";
 
 /** buildings.json loader with minimal validation */
 export function loadBuildingDefs(): BuildingDef[] {
@@ -43,4 +44,20 @@ export function loadCharacterDefs(): CharacterDef[] {
     if (!defs.some((c) => c.rarity === r)) throw new Error(`characters.json: no ${r} character`);
   }
   return defs;
+}
+
+export function loadStageDefs(skills: SkillDef[]): StageDef[] {
+  const stages = stagesRaw as unknown as StageDef[];
+  const ids = new Set<string>();
+  const sk = new Set(skills.map((x) => x.id));
+  for (const st of stages) {
+    if (!st.id || ids.has(st.id)) throw new Error(`stages.json: invalid or duplicate id "${st.id}"`);
+    ids.add(st.id);
+    if (st.enemies.length < 1) throw new Error(`stages.json: ${st.id} has no enemies`);
+    for (const e of st.enemies) {
+      if (e.hp <= 0 || e.atk <= 0) throw new Error(`stages.json: bad stats in ${st.id}`);
+      if (e.skill && !sk.has(e.skill)) throw new Error(`stages.json: ${st.id} has unknown skill ${e.skill}`);
+    }
+  }
+  return stages;
 }

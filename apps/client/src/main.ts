@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
 import { KingdomScene } from "./scenes/KingdomScene";
 import { CollectionScene } from "./scenes/CollectionScene";
+import { BattleScene } from "./scenes/BattleScene";
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -12,5 +13,5 @@ new Phaser.Game({
     width: window.innerWidth,
     height: window.innerHeight,
   },
-  scene: [BootScene, KingdomScene, CollectionScene],
+  scene: [BootScene, KingdomScene, CollectionScene, BattleScene],
 });
