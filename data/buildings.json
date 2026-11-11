@@ -1,0 +1,3 @@
+[
+  { "id": "farm", "name": "Sugar Farm", "size": { "w": 2, "h": 2 }, "produces": { "resource": "coin", "amount": 10, "seconds": 60 }, "cost": { "coin": 50 } }
+]

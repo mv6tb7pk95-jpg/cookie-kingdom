@@ -1,0 +1,9 @@
+name = "cookie-kingdom-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Phase 4에서 활성화
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "cookie-kingdom"
+# database_id = "<YOUR_D1_ID>"
