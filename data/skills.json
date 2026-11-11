@@ -1,1 +1,16 @@
-[]
+[
+  {"id": "skill_gumdrop_guard", "name": "Gumdrop Bash", "cooldown": 8, "power": 150, "target": "front"},
+  {"id": "skill_biscuit_scout", "name": "Crumb Toss", "cooldown": 8, "power": 150, "target": "lowest"},
+  {"id": "skill_sprinkle_archer", "name": "Sprinkle Volley", "cooldown": 8, "power": 90, "target": "all"},
+  {"id": "skill_taffy_tinker", "name": "Sticky Gadget", "cooldown": 8, "power": 150, "target": "lowest"},
+  {"id": "skill_waffle_shield", "name": "Grid Block", "cooldown": 8, "power": 150, "target": "front"},
+  {"id": "skill_caramel_ranger", "name": "Molten Arrow", "cooldown": 10, "power": 180, "target": "lowest"},
+  {"id": "skill_jelly_mage", "name": "Wobble Burst", "cooldown": 10, "power": 108, "target": "all"},
+  {"id": "skill_pretzel_brawler", "name": "Twist Strike", "cooldown": 10, "power": 180, "target": "front"},
+  {"id": "skill_honey_healer", "name": "Golden Drip", "cooldown": 10, "power": 108, "target": "all"},
+  {"id": "skill_mint_cryomancer", "name": "Frost Wave", "cooldown": 12, "power": 132, "target": "all"},
+  {"id": "skill_cocoa_paladin", "name": "Dark Bulwark", "cooldown": 12, "power": 220, "target": "front"},
+  {"id": "skill_candycane_duelist", "name": "Hook Flurry", "cooldown": 12, "power": 220, "target": "lowest"},
+  {"id": "skill_aurora_meringue", "name": "Skyglaze Cascade", "cooldown": 15, "power": 180, "target": "all"},
+  {"id": "skill_eclipse_truffle", "name": "Umbral Crush", "cooldown": 15, "power": 300, "target": "front"}
+]

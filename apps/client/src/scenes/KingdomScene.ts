@@ -67,6 +67,7 @@ export class KingdomScene extends Phaser.Scene {
   private menu: Phaser.GameObjects.Text[] = [];
   private panel: Phaser.GameObjects.Text[] = [];
   private panelInfo!: Phaser.GameObjects.Text;
+  private navBtn!: Phaser.GameObjects.Text;
   private ghost!: Phaser.GameObjects.Graphics;
   private placing: Placing | null = null;
   private selectedUid: string | null = null;
@@ -82,6 +83,10 @@ export class KingdomScene extends Phaser.Scene {
     this.defs = loadBuildingDefs();
     this.state = loadState();
     this.visuals.clear();
+    this.placing = null;
+    this.selectedUid = null;
+    this.uiClick = false;
+    this.dragged = false;
     this.menu = [];
     this.panel = [];
 
@@ -96,7 +101,9 @@ export class KingdomScene extends Phaser.Scene {
 
     this.setupInput(cam);
     this.setupUi();
-    this.scale.on("resize", () => this.layout());
+    const onResize = () => this.layout();
+    this.scale.on("resize", onResize);
+    this.events.once("shutdown", () => this.scale.off("resize", onResize));
     this.layout();
 
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.tick() });
@@ -338,6 +345,10 @@ export class KingdomScene extends Phaser.Scene {
         else this.select(null);
       }),
     ];
+    this.navBtn = this.button("Collection", () => {
+      saveState(this.state);
+      this.scene.start("Collection");
+    });
     this.refreshPanel();
   }
 
@@ -345,6 +356,7 @@ export class KingdomScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.hud.setPosition(8, 8);
     this.status.setPosition(8, 8 + this.hud.height + 4);
+    this.navBtn?.setPosition(width - this.navBtn.width - 8, this.hud.height + 14);
     this.toast.setPosition(width / 2, height * 0.3);
 
     let x = 8;

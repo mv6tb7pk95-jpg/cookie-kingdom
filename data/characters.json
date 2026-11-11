@@ -1,3 +1,16 @@
 [
-  { "id": "hero_01", "name": "Placeholder Hero", "rarity": "common", "position": "front", "element": "sweet", "hp": 1000, "atk": 100 }
+  {"id": "gumdrop_guard", "name": "Gumdrop Guard", "rarity": "common", "position": "front", "element": "sweet", "hp": 960, "atk": 70, "skill": "skill_gumdrop_guard"},
+  {"id": "biscuit_scout", "name": "Biscuit Scout", "rarity": "common", "position": "middle", "element": "warm", "hp": 800, "atk": 80, "skill": "skill_biscuit_scout"},
+  {"id": "sprinkle_archer", "name": "Sprinkle Archer", "rarity": "common", "position": "back", "element": "sweet", "hp": 640, "atk": 100, "skill": "skill_sprinkle_archer"},
+  {"id": "taffy_tinker", "name": "Taffy Tinker", "rarity": "common", "position": "middle", "element": "sour", "hp": 800, "atk": 80, "skill": "skill_taffy_tinker"},
+  {"id": "waffle_shield", "name": "Waffle Shield", "rarity": "common", "position": "front", "element": "warm", "hp": 960, "atk": 70, "skill": "skill_waffle_shield"},
+  {"id": "caramel_ranger", "name": "Caramel Ranger", "rarity": "rare", "position": "middle", "element": "warm", "hp": 1000, "atk": 110, "skill": "skill_caramel_ranger"},
+  {"id": "jelly_mage", "name": "Jelly Mage", "rarity": "rare", "position": "back", "element": "sour", "hp": 800, "atk": 140, "skill": "skill_jelly_mage"},
+  {"id": "pretzel_brawler", "name": "Pretzel Brawler", "rarity": "rare", "position": "front", "element": "cocoa", "hp": 1200, "atk": 95, "skill": "skill_pretzel_brawler"},
+  {"id": "honey_healer", "name": "Honey Healer", "rarity": "rare", "position": "back", "element": "sweet", "hp": 800, "atk": 140, "skill": "skill_honey_healer"},
+  {"id": "mint_cryomancer", "name": "Mint Cryomancer", "rarity": "epic", "position": "back", "element": "mint", "hp": 1040, "atk": 190, "skill": "skill_mint_cryomancer"},
+  {"id": "cocoa_paladin", "name": "Cocoa Paladin", "rarity": "epic", "position": "front", "element": "cocoa", "hp": 1560, "atk": 130, "skill": "skill_cocoa_paladin"},
+  {"id": "candycane_duelist", "name": "Candy Cane Duelist", "rarity": "epic", "position": "middle", "element": "mint", "hp": 1300, "atk": 150, "skill": "skill_candycane_duelist"},
+  {"id": "aurora_meringue", "name": "Aurora Meringue", "rarity": "legendary", "position": "back", "element": "sweet", "hp": 1360, "atk": 260, "skill": "skill_aurora_meringue"},
+  {"id": "eclipse_truffle", "name": "Eclipse Truffle", "rarity": "legendary", "position": "front", "element": "cocoa", "hp": 2040, "atk": 180, "skill": "skill_eclipse_truffle"}
 ]
