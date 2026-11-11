@@ -26,3 +26,5 @@ export interface HealthResponse {
 
 export const GRID_SIZE = 40;
 export const TILE = 64;
+
+export * from "./kingdom";
