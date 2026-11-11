@@ -71,6 +71,7 @@ export class KingdomScene extends Phaser.Scene {
   private panel: Phaser.GameObjects.Text[] = [];
   private panelInfo!: Phaser.GameObjects.Text;
   private navBtn!: Phaser.GameObjects.Text;
+  private battleBtn!: Phaser.GameObjects.Text;
   private ghost!: Phaser.GameObjects.Graphics;
   private placing: Placing | null = null;
   private selectedUid: string | null = null;
@@ -385,6 +386,10 @@ export class KingdomScene extends Phaser.Scene {
       saveState(this.state);
       this.fx.fadeTo("Collection");
     });
+    this.battleBtn = this.button("Battle", () => {
+      saveState(this.state);
+      this.fx.fadeTo("Battle");
+    });
     this.refreshPanel();
   }
 
@@ -393,6 +398,7 @@ export class KingdomScene extends Phaser.Scene {
     this.hud.setPosition(8, 8);
     this.status.setPosition(8, 8 + this.hud.height + 4);
     this.navBtn?.setPosition(width - this.navBtn.width - 8, this.hud.height + 14);
+    if (this.navBtn) this.battleBtn?.setPosition(width - this.battleBtn.width - 8, this.hud.height + 14 + this.navBtn.height + 6);
     this.toast.setPosition(width / 2, height * 0.3);
 
     let x = 8;
