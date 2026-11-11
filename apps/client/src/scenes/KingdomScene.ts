@@ -1,13 +1,19 @@
 import Phaser from "phaser";
 import {
   GRID_SIZE,
-  TILE,
+  ISO_W,
+  ISO_H,
   MAX_LEVEL,
+  blockPolys,
+  buildingHit,
   canPlace,
   collectYield,
+  depthOf,
   findDef,
+  gridToScreen,
   pendingYield,
   placeBuilding,
+  screenToGrid,
   sellBuilding,
   sellRefund,
   upgradeBuilding,
@@ -16,23 +22,45 @@ import {
   type GameState,
   type HealthResponse,
   type PlacedBuilding,
+  type Pt,
 } from "@ck/shared";
 import { loadBuildingDefs } from "../data";
 import { loadState, saveState } from "../save";
 
 const COLORS: Record<string, number> = { coin: 0xf2c94c, material: 0xc98f5a, crystal: 0x6ad1ff };
 const RES_LABEL: Record<string, string> = { coin: "Coin", crystal: "Crystal", material: "Material" };
+/** 화면 x가 음수가 되지 않도록 월드 원점을 오른쪽으로 민다 */
+const OX = (GRID_SIZE * ISO_W) / 2;
+
+const toWorld = (gx: number, gy: number): Pt => {
+  const s = gridToScreen(gx, gy);
+  return { x: s.x + OX, y: s.y };
+};
+const toGrid = (wx: number, wy: number): Pt => screenToGrid(wx - OX, wy);
+
+function shade(c: number, f: number): number {
+  const ch = (v: number) => Math.max(0, Math.min(255, Math.round(v * f)));
+  return (ch((c >> 16) & 255) << 16) | (ch((c >> 8) & 255) << 8) | ch(c & 255);
+}
+
+function blockHeight(d: BuildingDef, b: PlacedBuilding): number {
+  return 18 + 8 * Math.max(d.size.w, d.size.h) + 4 * (b.level - 1);
+}
 
 interface Placing {
   def: BuildingDef;
   moveUid?: string;
 }
 
+interface Visual {
+  g: Phaser.GameObjects.Graphics;
+  label: Phaser.GameObjects.Text;
+}
+
 export class KingdomScene extends Phaser.Scene {
   private defs: BuildingDef[] = [];
   private state!: GameState;
-  private world!: Phaser.GameObjects.Graphics;
-  private labels = new Map<string, Phaser.GameObjects.Text>();
+  private visuals = new Map<string, Visual>();
   private hud!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
   private toast!: Phaser.GameObjects.Text;
@@ -53,25 +81,18 @@ export class KingdomScene extends Phaser.Scene {
   create() {
     this.defs = loadBuildingDefs();
     this.state = loadState();
-    this.labels.clear();
+    this.visuals.clear();
     this.menu = [];
     this.panel = [];
 
-    // 바닥 타일
-    const g = this.add.graphics();
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        g.fillStyle((x + y) % 2 ? 0x6fae5b : 0x7bbd66, 1);
-        g.fillRect(x * TILE, y * TILE, TILE, TILE);
-      }
-    }
-    this.world = this.add.graphics().setDepth(1);
-    this.ghost = this.add.graphics().setDepth(5);
+    this.drawGround();
+    this.ghost = this.add.graphics().setDepth(10000);
 
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, GRID_SIZE * TILE, GRID_SIZE * TILE);
-    cam.centerOn((GRID_SIZE * TILE) / 2, (GRID_SIZE * TILE) / 2);
-    cam.setZoom(0.8);
+    cam.setBounds(-150, -250, GRID_SIZE * ISO_W + 300, GRID_SIZE * ISO_H + 500);
+    const c = toWorld(GRID_SIZE / 2, GRID_SIZE / 2);
+    cam.centerOn(c.x, c.y);
+    cam.setZoom(1);
 
     this.setupInput(cam);
     this.setupUi();
@@ -83,12 +104,49 @@ export class KingdomScene extends Phaser.Scene {
     this.tick();
     this.checkServer();
 
-    // 오프라인 동안 쌓인 수확분 안내
     const waiting = this.state.buildings.filter((b) => {
       const d = findDef(this.defs, b.defId);
       return d && pendingYield(b, d, Date.now()) > 0;
     }).length;
     if (waiting > 0) this.say(`${waiting} building(s) ready to harvest`);
+  }
+
+  // ---------- 그리기 도우미 ----------
+  private fillPoly(g: Phaser.GameObjects.Graphics, pts: Pt[], color: number, alpha = 1) {
+    g.fillStyle(color, alpha);
+    g.beginPath();
+    pts.forEach((p, i) => (i ? g.lineTo(p.x + OX, p.y) : g.moveTo(p.x + OX, p.y)));
+    g.closePath();
+    g.fillPath();
+  }
+
+  private strokePoly(g: Phaser.GameObjects.Graphics, pts: Pt[], width: number, color: number, alpha = 1) {
+    g.lineStyle(width, color, alpha);
+    g.beginPath();
+    pts.forEach((p, i) => (i ? g.lineTo(p.x + OX, p.y) : g.moveTo(p.x + OX, p.y)));
+    g.closePath();
+    g.strokePath();
+  }
+
+  private cellPoly(x: number, y: number, w = 1, h = 1): Pt[] {
+    return [gridToScreen(x, y), gridToScreen(x + w, y), gridToScreen(x + w, y + h), gridToScreen(x, y + h)];
+  }
+
+  private drawGround() {
+    const g = this.add.graphics().setDepth(-10);
+    const G = GRID_SIZE;
+    const drop = 24;
+    const down = (p: Pt): Pt => ({ x: p.x, y: p.y + drop });
+    const W = gridToScreen(0, G);
+    const S = gridToScreen(G, G);
+    const E = gridToScreen(G, 0);
+    this.fillPoly(g, [W, S, down(S), down(W)], 0x4a3a2a);
+    this.fillPoly(g, [S, E, down(E), down(S)], 0x3a2d20);
+    for (let y = 0; y < G; y++) {
+      for (let x = 0; x < G; x++) {
+        this.fillPoly(g, this.cellPoly(x, y), (x + y) % 2 ? 0x6fae5b : 0x7bbd66);
+      }
+    }
   }
 
   // ---------- 입력 ----------
@@ -112,10 +170,8 @@ export class KingdomScene extends Phaser.Scene {
       const fromUi = this.uiClick;
       this.uiClick = false;
       if (fromUi || this.dragged) return;
-      const cx = Math.floor(p.worldX / TILE);
-      const cy = Math.floor(p.worldY / TILE);
       if (this.placing) this.confirmPlacing(p);
-      else this.tapCell(cx, cy);
+      else this.tapAt(p.worldX, p.worldY);
     });
 
     this.input.on("wheel", (_p: unknown, _o: unknown, _dx: number, dy: number) => {
@@ -123,15 +179,21 @@ export class KingdomScene extends Phaser.Scene {
     });
   }
 
-  private buildingAt(cx: number, cy: number): PlacedBuilding | undefined {
-    return this.state.buildings.find((b) => {
-      const d = findDef(this.defs, b.defId);
-      return d && cx >= b.x && cx < b.x + d.size.w && cy >= b.y && cy < b.y + d.size.h;
-    });
+  /** 앞쪽(그려지는 순서가 뒤인) 건물부터 입체 블록 전체를 기준으로 판정 */
+  private buildingAtPoint(wx: number, wy: number): PlacedBuilding | undefined {
+    const pt = { x: wx - OX, y: wy };
+    const list = this.state.buildings
+      .map((b) => ({ b, d: findDef(this.defs, b.defId) }))
+      .filter((v): v is { b: PlacedBuilding; d: BuildingDef } => !!v.d)
+      .sort((a, c) => depthOf(c.b.x, c.b.y, c.d.size.w, c.d.size.h) - depthOf(a.b.x, a.b.y, a.d.size.w, a.d.size.h));
+    for (const { b, d } of list) {
+      if (buildingHit(pt, b.x, b.y, d.size.w, d.size.h, blockHeight(d, b))) return b;
+    }
+    return undefined;
   }
 
-  private tapCell(cx: number, cy: number) {
-    const b = this.buildingAt(cx, cy);
+  private tapAt(wx: number, wy: number) {
+    const b = this.buildingAtPoint(wx, wy);
     if (!b) {
       this.select(null);
       return;
@@ -154,9 +216,8 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private cellFromPointer(p: Phaser.Input.Pointer, def: BuildingDef) {
-    const x = Math.floor(p.worldX / TILE - def.size.w / 2 + 0.5);
-    const y = Math.floor(p.worldY / TILE - def.size.h / 2 + 0.5);
-    return { x, y };
+    const g = toGrid(p.worldX, p.worldY);
+    return { x: Math.floor(g.x - def.size.w / 2 + 0.5), y: Math.floor(g.y - def.size.h / 2 + 0.5) };
   }
 
   private drawGhost(p: Phaser.Input.Pointer) {
@@ -165,8 +226,9 @@ export class KingdomScene extends Phaser.Scene {
     const { def, moveUid } = this.placing;
     const { x, y } = this.cellFromPointer(p, def);
     const ok = canPlace(this.state, this.defs, def, x, y, moveUid);
-    this.ghost.fillStyle(ok ? 0x44ff88 : 0xff4466, 0.55);
-    this.ghost.fillRect(x * TILE, y * TILE, def.size.w * TILE, def.size.h * TILE);
+    const poly = this.cellPoly(x, y, def.size.w, def.size.h);
+    this.fillPoly(this.ghost, poly, ok ? 0x44ff88 : 0xff4466, 0.6);
+    this.strokePoly(this.ghost, poly, 3, ok ? 0xffffff : 0xffcccc, 0.9);
   }
 
   private confirmPlacing(p: Phaser.Input.Pointer) {
@@ -200,6 +262,7 @@ export class KingdomScene extends Phaser.Scene {
   // ---------- 선택 / 패널 ----------
   private select(uid: string | null) {
     this.selectedUid = uid;
+    this.drawBuildings();
     this.refreshPanel();
   }
 
@@ -220,7 +283,7 @@ export class KingdomScene extends Phaser.Scene {
         padding: { x: 10, y: 8 },
       })
       .setScrollFactor(0)
-      .setDepth(20)
+      .setDepth(20000)
       .setInteractive({ useHandCursor: true });
     t.on("pointerup", () => {
       this.uiClick = true;
@@ -231,24 +294,22 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private setupUi() {
-    this.hud = this.add
-      .text(0, 0, "", { color: "#fff", fontSize: "16px", backgroundColor: "#000000aa", padding: { x: 10, y: 6 } })
-      .setScrollFactor(0)
-      .setDepth(20);
-    this.status = this.add
-      .text(0, 0, "", { color: "#ddd", fontSize: "12px", backgroundColor: "#00000088", padding: { x: 6, y: 3 } })
-      .setScrollFactor(0)
-      .setDepth(20);
-    this.toast = this.add
-      .text(0, 0, "", { color: "#fff", fontSize: "18px", backgroundColor: "#000000cc", padding: { x: 12, y: 8 } })
-      .setScrollFactor(0)
-      .setDepth(30)
+    const ui = (t: Phaser.GameObjects.Text) => t.setScrollFactor(0).setDepth(20000);
+    this.hud = ui(
+      this.add.text(0, 0, "", { color: "#fff", fontSize: "16px", backgroundColor: "#000000aa", padding: { x: 10, y: 6 } }),
+    );
+    this.status = ui(
+      this.add.text(0, 0, "", { color: "#ddd", fontSize: "12px", backgroundColor: "#00000088", padding: { x: 6, y: 3 } }),
+    );
+    this.toast = ui(
+      this.add.text(0, 0, "", { color: "#fff", fontSize: "18px", backgroundColor: "#000000cc", padding: { x: 12, y: 8 } }),
+    )
+      .setDepth(30000)
       .setOrigin(0.5)
       .setVisible(false);
-    this.panelInfo = this.add
-      .text(0, 0, "", { color: "#fff", fontSize: "15px", backgroundColor: "#000000bb", padding: { x: 10, y: 6 } })
-      .setScrollFactor(0)
-      .setDepth(20);
+    this.panelInfo = ui(
+      this.add.text(0, 0, "", { color: "#fff", fontSize: "15px", backgroundColor: "#000000bb", padding: { x: 10, y: 6 } }),
+    );
 
     for (const d of this.defs) {
       this.menu.push(this.button(`${d.name} ${d.cost.coin}`, () => this.startPlacing({ def: d })));
@@ -310,9 +371,7 @@ export class KingdomScene extends Phaser.Scene {
       this.panelInfo.setText(`${this.placing.moveUid ? "Move" : "Build"}: ${this.placing.def.name}`);
     } else if (s) {
       const next = s.b.level >= MAX_LEVEL ? "MAX" : `${upgradeCost(s.d, s.b.level)}`;
-      this.panelInfo.setText(
-        `${s.d.name}  Lv.${s.b.level}  | upgrade ${next} | sell +${sellRefund(s.d)}`,
-      );
+      this.panelInfo.setText(`${s.d.name}  Lv.${s.b.level}  | upgrade ${next} | sell +${sellRefund(s.d)}`);
       for (const b of this.panel) b.setVisible(true);
     }
     this.layout();
@@ -339,34 +398,45 @@ export class KingdomScene extends Phaser.Scene {
 
   private drawBuildings() {
     const now = Date.now();
-    this.world.clear();
     const alive = new Set<string>();
     for (const b of this.state.buildings) {
       const d = findDef(this.defs, b.defId);
       if (!d) continue;
       alive.add(b.uid);
-      const w = d.size.w * TILE;
-      const h = d.size.h * TILE;
-      const color = d.produces ? COLORS[d.produces.resource] : 0xcccccc;
-      this.world.fillStyle(color, 1);
-      this.world.fillRoundedRect(b.x * TILE + 3, b.y * TILE + 3, w - 6, h - 6, 10);
+
+      let v = this.visuals.get(b.uid);
+      if (!v) {
+        v = {
+          g: this.add.graphics(),
+          label: this.add.text(0, 0, "", { color: "#222", fontSize: "13px", align: "center" }).setOrigin(0.5),
+        };
+        this.visuals.set(b.uid, v);
+      }
+      const depth = depthOf(b.x, b.y, d.size.w, d.size.h);
+      const height = blockHeight(d, b);
+      const base = d.produces ? COLORS[d.produces.resource] : 0xcccccc;
+      const polys = blockPolys(b.x, b.y, d.size.w, d.size.h, height);
+
+      v.g.clear().setDepth(depth);
+      this.fillPoly(v.g, polys.left, shade(base, 0.7));
+      this.fillPoly(v.g, polys.right, shade(base, 0.5));
+      this.fillPoly(v.g, polys.top, base);
+      this.strokePoly(v.g, polys.top, 1, 0x000000, 0.25);
       if (b.uid === this.selectedUid) {
-        this.world.lineStyle(4, 0xffffff, 1);
-        this.world.strokeRoundedRect(b.x * TILE + 3, b.y * TILE + 3, w - 6, h - 6, 10);
+        for (const poly of [polys.top, polys.left, polys.right]) this.strokePoly(v.g, poly, 3, 0xffffff, 1);
       }
+
       const ready = pendingYield(b, d, now);
-      let label = this.labels.get(b.uid);
-      if (!label) {
-        label = this.add.text(0, 0, "", { color: "#222", fontSize: "16px", align: "center" }).setOrigin(0.5).setDepth(2);
-        this.labels.set(b.uid, label);
-      }
-      label.setPosition(b.x * TILE + w / 2, b.y * TILE + h / 2);
-      label.setText(`${d.name}\nLv.${b.level}${ready > 0 ? `\nREADY +${ready}` : ""}`);
+      const c = toWorld(b.x + d.size.w / 2, b.y + d.size.h / 2);
+      v.label.setPosition(c.x, c.y - height);
+      v.label.setDepth(depth + 0.5);
+      v.label.setText(`${d.name}\nLv.${b.level}${ready > 0 ? `\nREADY +${ready}` : ""}`);
     }
-    for (const [uid, t] of this.labels) {
+    for (const [uid, v] of this.visuals) {
       if (!alive.has(uid)) {
-        t.destroy();
-        this.labels.delete(uid);
+        v.g.destroy();
+        v.label.destroy();
+        this.visuals.delete(uid);
       }
     }
   }
