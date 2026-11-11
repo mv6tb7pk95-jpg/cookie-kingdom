@@ -1,3 +1,5 @@
 [
-  { "id": "farm", "name": "Sugar Farm", "size": { "w": 2, "h": 2 }, "produces": { "resource": "coin", "amount": 10, "seconds": 60 }, "cost": { "coin": 50 } }
+  { "id": "farm", "name": "Sugar Farm", "size": { "w": 2, "h": 2 }, "produces": { "resource": "coin", "amount": 10, "seconds": 60 }, "cost": { "coin": 50 } },
+  { "id": "mill", "name": "Flour Mill", "size": { "w": 3, "h": 2 }, "produces": { "resource": "material", "amount": 3, "seconds": 120 }, "cost": { "coin": 120 } },
+  { "id": "mine", "name": "Crystal Mine", "size": { "w": 3, "h": 3 }, "produces": { "resource": "crystal", "amount": 1, "seconds": 300 }, "cost": { "coin": 300 } }
 ]
