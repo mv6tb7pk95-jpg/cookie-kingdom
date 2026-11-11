@@ -26,10 +26,11 @@ import {
 } from "@ck/shared";
 import { loadBuildingDefs } from "../data";
 import { loadState, saveState } from "../save";
+import { Fx, css } from "../fx";
 
 const COLORS: Record<string, number> = { coin: 0xf2c94c, material: 0xc98f5a, crystal: 0x6ad1ff };
 const RES_LABEL: Record<string, string> = { coin: "Coin", crystal: "Crystal", material: "Material" };
-/** 화면 x가 음수가 되지 않도록 월드 원점을 오른쪽으로 민다 */
+/** 화면 x가 음수가 되지 않도록 월드 원점을 오른쪽으로 밀다 */
 const OX = (GRID_SIZE * ISO_W) / 2;
 
 const toWorld = (gx: number, gy: number): Pt => {
@@ -55,11 +56,13 @@ interface Placing {
 interface Visual {
   g: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
+  badge: Phaser.GameObjects.Image;
 }
 
 export class KingdomScene extends Phaser.Scene {
   private defs: BuildingDef[] = [];
   private state!: GameState;
+  private fx!: Fx;
   private visuals = new Map<string, Visual>();
   private hud!: Phaser.GameObjects.Text;
   private status!: Phaser.GameObjects.Text;
@@ -80,6 +83,7 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   create() {
+    this.fx = new Fx(this);
     this.defs = loadBuildingDefs();
     this.state = loadState();
     this.visuals.clear();
@@ -110,6 +114,8 @@ export class KingdomScene extends Phaser.Scene {
     this.time.addEvent({ delay: 5000, loop: true, callback: () => saveState(this.state) });
     this.tick();
     this.checkServer();
+    this.fx.ambient();
+    this.fx.fadeIn();
 
     const waiting = this.state.buildings.filter((b) => {
       const d = findDef(this.defs, b.defId);
@@ -154,6 +160,16 @@ export class KingdomScene extends Phaser.Scene {
         this.fillPoly(g, this.cellPoly(x, y), (x + y) % 2 ? 0x6fae5b : 0x7bbd66);
       }
     }
+  }
+
+  /** 건물 바닥 중심 / 윗면 중심(월드 좌표) */
+  private groundOf(b: PlacedBuilding, d: BuildingDef): Pt {
+    return toWorld(b.x + d.size.w / 2, b.y + d.size.h / 2);
+  }
+
+  private topOf(b: PlacedBuilding, d: BuildingDef): Pt {
+    const c = this.groundOf(b, d);
+    return { x: c.x, y: c.y - blockHeight(d, b) };
   }
 
   // ---------- 입력 ----------
@@ -209,6 +225,10 @@ export class KingdomScene extends Phaser.Scene {
     const got = collectYield(this.state, b, d, Date.now());
     if (got > 0 && d.produces) {
       this.say(`+${got} ${RES_LABEL[d.produces.resource]}`);
+      const col = COLORS[d.produces.resource] ?? 0xffffff;
+      const top = this.topOf(b, d);
+      this.fx.burst(top.x, top.y, col, 16, 70);
+      this.fx.floatText(top.x, top.y - 10, `+${got}`, css(col));
       this.changed();
     }
     this.select(b.uid);
@@ -249,6 +269,8 @@ export class KingdomScene extends Phaser.Scene {
         b.y = y;
         this.endPlacing();
         this.changed();
+        const g = this.groundOf(b, def);
+        this.fx.ring(g.x, g.y, 0x9be8ff);
       } else this.say("Cannot move there");
       return;
     }
@@ -256,6 +278,11 @@ export class KingdomScene extends Phaser.Scene {
     if (b) {
       this.endPlacing();
       this.changed();
+      const g = this.groundOf(b, def);
+      const top = this.topOf(b, def);
+      this.fx.ring(g.x, g.y, 0xffffff);
+      this.fx.burst(g.x, g.y, 0xfff2b0, 18, 70);
+      this.fx.floatText(top.x, top.y - 10, "Built!", "#ffffff");
     } else if (this.state.resources.coin < def.cost.coin) this.say("Not enough coins");
     else this.say("Cannot build there");
   }
@@ -326,8 +353,13 @@ export class KingdomScene extends Phaser.Scene {
       this.button("Upgrade", () => {
         const s = this.selected();
         if (!s) return;
-        if (upgradeBuilding(this.state, s.d, s.b, Date.now())) this.changed();
-        else this.say(s.b.level >= MAX_LEVEL ? "Max level" : "Not enough coins");
+        if (upgradeBuilding(this.state, s.d, s.b, Date.now())) {
+          this.changed();
+          const top = this.topOf(s.b, s.d);
+          this.fx.stars(top.x, top.y, 7);
+          this.fx.ring(this.groundOf(s.b, s.d).x, this.groundOf(s.b, s.d).y, 0xfff08a);
+          this.fx.floatText(top.x, top.y - 10, `Lv.${s.b.level}`, "#fff08a");
+        } else this.say(s.b.level >= MAX_LEVEL ? "Max level" : "Not enough coins");
       }),
       this.button("Move", () => {
         const s = this.selected();
@@ -336,9 +368,13 @@ export class KingdomScene extends Phaser.Scene {
       this.button("Sell", () => {
         const s = this.selected();
         if (!s) return;
+        const top = this.topOf(s.b, s.d);
+        const refund = sellRefund(s.d);
         sellBuilding(this.state, s.d, s.b);
         this.select(null);
         this.changed();
+        this.fx.burst(top.x, top.y + blockHeight(s.d, s.b) / 2, 0xd9d9d9, 18, 70);
+        this.fx.floatText(top.x, top.y, `+${refund}`, "#f2c94c");
       }),
       this.button("Cancel", () => {
         if (this.placing) this.endPlacing();
@@ -347,7 +383,7 @@ export class KingdomScene extends Phaser.Scene {
     ];
     this.navBtn = this.button("Collection", () => {
       saveState(this.state);
-      this.scene.start("Collection");
+      this.fx.fadeTo("Collection");
     });
     this.refreshPanel();
   }
@@ -408,6 +444,23 @@ export class KingdomScene extends Phaser.Scene {
     this.drawBuildings();
   }
 
+  private makeBadge(): Phaser.GameObjects.Image {
+    const badge = this.add
+      .image(0, 0, "fx_dot")
+      .setTint(0xffe36b)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    this.tweens.add({
+      targets: badge,
+      scale: { from: 0.8, to: 1.4 },
+      alpha: { from: 0.45, to: 1 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+    });
+    return badge;
+  }
+
   private drawBuildings() {
     const now = Date.now();
     const alive = new Set<string>();
@@ -421,6 +474,7 @@ export class KingdomScene extends Phaser.Scene {
         v = {
           g: this.add.graphics(),
           label: this.add.text(0, 0, "", { color: "#222", fontSize: "13px", align: "center" }).setOrigin(0.5),
+          badge: this.makeBadge(),
         };
         this.visuals.set(b.uid, v);
       }
@@ -443,11 +497,14 @@ export class KingdomScene extends Phaser.Scene {
       v.label.setPosition(c.x, c.y - height);
       v.label.setDepth(depth + 0.5);
       v.label.setText(`${d.name}\nLv.${b.level}${ready > 0 ? `\nREADY +${ready}` : ""}`);
+      v.badge.setPosition(c.x, c.y - height - 44).setDepth(depth + 1).setVisible(ready > 0);
     }
     for (const [uid, v] of this.visuals) {
       if (!alive.has(uid)) {
+        this.tweens.killTweensOf(v.badge);
         v.g.destroy();
         v.label.destroy();
+        v.badge.destroy();
         this.visuals.delete(uid);
       }
     }

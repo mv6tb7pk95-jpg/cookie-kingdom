@@ -21,10 +21,13 @@ import {
 } from "@ck/shared";
 import { loadCharacterDefs, loadSkillDefs } from "../data";
 import { loadState, saveState } from "../save";
+import { Fx } from "../fx";
 
 const TEXT_COLOR: Record<Rarity, string> = { common: "#c8c8d0", rare: "#7dbbff", epic: "#d9a0ff", legendary: "#ffcf5a" };
 const CHIP_BG: Record<Rarity, string> = { common: "#4a4a55", rare: "#2f5f99", epic: "#6b3a99", legendary: "#99700a" };
 const RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
+const FX_COLOR: Record<Rarity, number> = { common: 0xc8c8d0, rare: 0x7dbbff, epic: 0xc58bff, legendary: 0xffcf5a };
+const LINE_STEP = 80;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 type Tab = "gacha" | "roster";
@@ -33,9 +36,12 @@ export class CollectionScene extends Phaser.Scene {
   private defs: CharacterDef[] = [];
   private skills: SkillDef[] = [];
   private state!: GameState;
+  private fx!: Fx;
   private tab: Tab = "gacha";
   private selectedId: string | null = null;
   private lastPull: PullResult[] = [];
+  /** 뽑기 직후 한 번만 결과 줄을 순차 등장시킨다 */
+  private reveal = false;
   private objs: Phaser.GameObjects.Text[] = [];
   private toast!: Phaser.GameObjects.Text;
 
@@ -44,11 +50,13 @@ export class CollectionScene extends Phaser.Scene {
   }
 
   create() {
+    this.fx = new Fx(this);
     this.defs = loadCharacterDefs();
     this.skills = loadSkillDefs(this.defs);
     this.state = loadState();
     this.objs = [];
     this.lastPull = [];
+    this.reveal = false;
     this.toast = this.add
       .text(0, 0, "", { color: "#fff", fontSize: "18px", backgroundColor: "#000000cc", padding: { x: 12, y: 8 } })
       .setDepth(100)
@@ -58,6 +66,7 @@ export class CollectionScene extends Phaser.Scene {
     this.scale.on("resize", onResize);
     this.events.once("shutdown", () => this.scale.off("resize", onResize));
     this.render();
+    this.fx.fadeIn();
   }
 
   // ---------- helpers ----------
@@ -92,7 +101,10 @@ export class CollectionScene extends Phaser.Scene {
 
   // ---------- layout ----------
   private render() {
-    for (const o of this.objs) o.destroy();
+    for (const o of this.objs) {
+      this.tweens.killTweensOf(o);
+      o.destroy();
+    }
     this.objs = [];
     const { width } = this.scale;
     const r = this.state.resources;
@@ -101,7 +113,7 @@ export class CollectionScene extends Phaser.Scene {
 
     const back = this.btn(0, y, "Kingdom", () => {
       saveState(this.state);
-      this.scene.start("Kingdom");
+      this.fx.fadeTo("Kingdom");
     });
     back.setX(width - back.width - 8);
     const t1 = this.btn(8, y, "Gacha", () => this.setTab("gacha"), this.tab === "gacha" ? "#7a4fb0" : "#3a2b52");
@@ -114,6 +126,7 @@ export class CollectionScene extends Phaser.Scene {
 
   private setTab(t: Tab) {
     this.tab = t;
+    this.reveal = false;
     this.render();
   }
 
@@ -152,11 +165,26 @@ export class CollectionScene extends Phaser.Scene {
       this.txt(8, y, "No pulls yet.", "#aaa", 14);
       return;
     }
-    for (const p of this.lastPull) {
+    const animate = this.reveal;
+    this.reveal = false;
+    this.lastPull.forEach((p, i) => {
       const d = this.defs.find((c) => c.id === p.charId);
       const line = `${cap(p.rarity)}  ${d ? d.name : p.charId}   ${p.isNew ? "NEW" : `+${p.shards} shards`}`;
-      y = this.bottom(this.txt(8, y, line, TEXT_COLOR[p.rarity], 15), 2);
-    }
+      const lineY = y;
+      const text = this.txt(8, lineY, line, TEXT_COLOR[p.rarity], 15);
+      y = this.bottom(text, 2);
+      if (animate) {
+        const delay = i * LINE_STEP;
+        text.setAlpha(0).setX(-20);
+        this.tweens.add({ targets: text, alpha: 1, x: 8, delay, duration: 220, ease: "Cubic.easeOut" });
+        if (RANK[p.rarity] >= RANK.rare) {
+          this.time.delayedCall(delay, () => {
+            this.fx.burst(60, lineY + 10, FX_COLOR[p.rarity], RANK[p.rarity] >= RANK.epic ? 18 : 10, 50);
+            if (RANK[p.rarity] >= RANK.epic) this.fx.stars(60, lineY + 10, 4, FX_COLOR[p.rarity]);
+          });
+        }
+      }
+    });
   }
 
   private doPull(n: number) {
@@ -166,9 +194,25 @@ export class CollectionScene extends Phaser.Scene {
       return;
     }
     this.lastPull = res;
+    this.reveal = true;
     saveState(this.state);
     this.render();
-    if (res.some((p) => p.rarity === "legendary")) this.say("Legendary!");
+
+    const best = res.reduce<Rarity>((acc, p) => (RANK[p.rarity] > RANK[acc] ? p.rarity : acc), "common");
+    const total = Math.min(res.length * LINE_STEP, 900);
+    if (best === "epic") {
+      this.time.delayedCall(total, () => {
+        this.fx.flash(0xb06cff, 400);
+        this.say("Epic!");
+      });
+    } else if (best === "legendary") {
+      this.time.delayedCall(total, () => {
+        this.fx.flash(0xffd34d, 500);
+        this.fx.shake(350, 0.012);
+        this.fx.confetti(70);
+        this.say("Legendary!");
+      });
+    }
   }
 
   private renderRoster(y0: number) {
@@ -237,21 +281,21 @@ export class CollectionScene extends Phaser.Scene {
       8,
       y,
       atCap ? "Level Up  (awaken to raise cap)" : `Level Up  (${lc.coin} coin + ${lc.material} material)`,
-      () => this.doGrow(levelUp(this.state, sel.id)),
+      () => this.doGrow(levelUp(this.state, sel.id), "level"),
     );
     const cost = awakenCost(o.stars);
     const aw = this.btn(
       0,
       y,
       o.stars >= MAX_STARS ? "Awaken  (max)" : `Awaken  (${o.shards}/${cost} shards)`,
-      () => this.doGrow(awaken(this.state, sel.id)),
+      () => this.doGrow(awaken(this.state, sel.id), "awaken"),
       "#8a5a2b",
     );
     if (8 + lv.width + 8 + aw.width > width - 8) aw.setPosition(8, y + lv.height + 6);
     else aw.setPosition(8 + lv.width + 8, y);
   }
 
-  private doGrow(result: "ok" | "max" | "funds" | "shards" | "unowned") {
+  private doGrow(result: "ok" | "max" | "funds" | "shards" | "unowned", kind: "level" | "awaken") {
     const msg: Record<string, string> = {
       ok: "Done",
       max: "Already at the limit",
@@ -260,7 +304,16 @@ export class CollectionScene extends Phaser.Scene {
       unowned: "Not collected yet",
     };
     this.say(msg[result]);
-    if (result === "ok") saveState(this.state);
+    if (result === "ok") {
+      saveState(this.state);
+      const { width, height } = this.scale;
+      if (kind === "awaken") {
+        this.fx.flash(0xfff08a, 300);
+        this.fx.stars(width / 2, height * 0.5, 10);
+      } else {
+        this.fx.burst(width / 2, height * 0.5, 0xfff2b0, 16, 80);
+      }
+    }
     this.render();
   }
 }
