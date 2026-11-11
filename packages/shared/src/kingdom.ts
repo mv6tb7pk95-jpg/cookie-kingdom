@@ -37,6 +37,10 @@ export interface GameState {
   nextId: number;
   roster: Record<string, OwnedCharacter>;
   gacha: GachaState;
+  /** stage id -> best star rating (1-3) */
+  cleared: Record<string, number>;
+  /** character ids sent into battle (max 5) */
+  team: string[];
 }
 
 export function newGameState(): GameState {
@@ -47,6 +51,8 @@ export function newGameState(): GameState {
     nextId: 1,
     roster: {},
     gacha: { pullsTotal: 0, sinceEpic: 0, sinceLegendary: 0 },
+    cleared: {},
+    team: [],
   };
 }
 
@@ -66,6 +72,8 @@ export function migrateState(raw: unknown): GameState | null {
     nextId: typeof s.nextId === "number" ? s.nextId : buildings.length + 1,
     roster: isV2 && s.roster && typeof s.roster === "object" ? (s.roster as Record<string, OwnedCharacter>) : {},
     gacha: isV2 && s.gacha ? { ...base.gacha, ...(s.gacha as Partial<GachaState>) } : base.gacha,
+    cleared: isV2 && s.cleared && typeof s.cleared === "object" ? (s.cleared as Record<string, number>) : {},
+    team: isV2 && Array.isArray(s.team) ? (s.team as string[]) : [],
   };
 }
 
