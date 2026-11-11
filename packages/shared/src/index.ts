@@ -17,6 +17,18 @@ export interface CharacterDef {
   element: string;
   hp: number;
   atk: number;
+  /** SkillDef.id */
+  skill: string;
+}
+
+export interface SkillDef {
+  id: string;
+  name: string;
+  /** seconds */
+  cooldown: number;
+  /** percent of ATK */
+  power: number;
+  target: "front" | "lowest" | "all";
 }
 
 export interface HealthResponse {
@@ -28,5 +40,5 @@ export const GRID_SIZE = 40;
 export const TILE = 64;
 
 export * from "./kingdom";
-
 export * from "./iso";
+export * from "./collection";

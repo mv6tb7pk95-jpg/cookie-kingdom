@@ -16,19 +16,56 @@ export interface PlacedBuilding {
   lastCollected: number;
 }
 
+export interface OwnedCharacter {
+  level: number;
+  stars: number;
+  shards: number;
+}
+
+export interface GachaState {
+  pullsTotal: number;
+  /** pulls since the last epic-or-better */
+  sinceEpic: number;
+  /** pulls since the last legendary */
+  sinceLegendary: number;
+}
+
 export interface GameState {
-  version: 1;
+  version: 2;
   resources: Record<ResourceId, number>;
   buildings: PlacedBuilding[];
   nextId: number;
+  roster: Record<string, OwnedCharacter>;
+  gacha: GachaState;
 }
 
 export function newGameState(): GameState {
   return {
-    version: 1,
-    resources: { coin: 500, crystal: 10, material: 0 },
+    version: 2,
+    resources: { coin: 500, crystal: 30, material: 0 },
     buildings: [],
     nextId: 1,
+    roster: {},
+    gacha: { pullsTotal: 0, sinceEpic: 0, sinceLegendary: 0 },
+  };
+}
+
+/** Accepts a v1 or v2 save and returns a v2 state, or null if it is not a usable save. */
+export function migrateState(raw: unknown): GameState | null {
+  if (!raw || typeof raw !== "object") return null;
+  const s = raw as Record<string, unknown>;
+  const version = s.version;
+  if ((version !== 1 && version !== 2) || !s.resources || !Array.isArray(s.buildings)) return null;
+  const base = newGameState();
+  const buildings = s.buildings as PlacedBuilding[];
+  const isV2 = version === 2;
+  return {
+    version: 2,
+    resources: { ...base.resources, ...(s.resources as Partial<Record<ResourceId, number>>) },
+    buildings,
+    nextId: typeof s.nextId === "number" ? s.nextId : buildings.length + 1,
+    roster: isV2 && s.roster && typeof s.roster === "object" ? (s.roster as Record<string, OwnedCharacter>) : {},
+    gacha: isV2 && s.gacha ? { ...base.gacha, ...(s.gacha as Partial<GachaState>) } : base.gacha,
   };
 }
 
