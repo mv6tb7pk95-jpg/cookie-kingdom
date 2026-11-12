@@ -2,8 +2,9 @@ name = "cookie-kingdom-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 
-# Phase 4에서 활성화
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "cookie-kingdom"
-# database_id = "<YOUR_D1_ID>"
+# database_id is filled in after `wrangler d1 create cookie-kingdom` (see docs/SERVER.md)
+[[d1_databases]]
+binding = "DB"
+database_name = "cookie-kingdom"
+database_id = "REPLACE_WITH_D1_ID"
+migrations_dir = "migrations"

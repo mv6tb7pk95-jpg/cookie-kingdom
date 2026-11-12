@@ -6,7 +6,7 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "tsx test/iso.test.ts && tsx test/collection.test.ts && tsx test/battle.test.ts"
+    "test": "tsx test/iso.test.ts && tsx test/collection.test.ts && tsx test/battle.test.ts && tsx test/actions.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

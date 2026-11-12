@@ -1,12 +1,12 @@
 {
   "name": "server",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc -p .",
-    "build": "tsc -p ."
+    "build": "tsc -p .",
+    "test": "tsx test/server.test.ts"
   },
   "dependencies": {
     "@ck/shared": "workspace:*",
@@ -15,6 +15,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241022.0",
     "typescript": "^5.5.0",
-    "wrangler": "^3.80.0"
+    "wrangler": "^3.80.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^20.14.0"
   }
 }

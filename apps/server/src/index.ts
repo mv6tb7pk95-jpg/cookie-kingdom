@@ -1,11 +1,13 @@
-import { Hono } from "hono";
-import type { HealthResponse } from "@ck/shared";
+import { createApp, cryptoDeps } from "./app";
+import { D1Store } from "./store";
+import { gameData } from "./data";
 
-const app = new Hono();
+export interface Env {
+  DB: D1Database;
+}
 
-app.get("/api/health", (c) => {
-  const body: HealthResponse = { ok: true, version: "0.0.1" };
-  return c.json(body);
-});
-
-export default app;
+export default {
+  fetch(req: Request, env: Env): Promise<Response> | Response {
+    return createApp({ store: new D1Store(env.DB), data: gameData, ...cryptoDeps() }).fetch(req);
+  },
+};
