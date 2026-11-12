@@ -6,13 +6,10 @@ import {
   PULL_COST,
   RATES,
   TEN_COST,
-  awaken,
   awakenCost,
   charStats,
-  levelUp,
   levelUpCost,
   maxLevel,
-  pull,
   type CharacterDef,
   type GameState,
   type PullResult,
@@ -20,7 +17,7 @@ import {
   type SkillDef,
 } from "@ck/shared";
 import { loadCharacterDefs, loadSkillDefs } from "../data";
-import { loadState, saveState } from "../save";
+import { session } from "../session";
 import { Fx } from "../fx";
 
 const TEXT_COLOR: Record<Rarity, string> = { common: "#c8c8d0", rare: "#7dbbff", epic: "#d9a0ff", legendary: "#ffcf5a" };
@@ -35,7 +32,9 @@ type Tab = "gacha" | "roster";
 export class CollectionScene extends Phaser.Scene {
   private defs: CharacterDef[] = [];
   private skills: SkillDef[] = [];
-  private state!: GameState;
+  private get state(): GameState {
+    return session().state;
+  }
   private fx!: Fx;
   private tab: Tab = "gacha";
   private selectedId: string | null = null;
@@ -53,7 +52,6 @@ export class CollectionScene extends Phaser.Scene {
     this.fx = new Fx(this);
     this.defs = loadCharacterDefs();
     this.skills = loadSkillDefs(this.defs);
-    this.state = loadState();
     this.objs = [];
     this.lastPull = [];
     this.reveal = false;
@@ -112,7 +110,7 @@ export class CollectionScene extends Phaser.Scene {
     let y = this.bottom(hud, 8);
 
     const back = this.btn(0, y, "Kingdom", () => {
-      saveState(this.state);
+      void session().flush();
       this.fx.fadeTo("Kingdom");
     });
     back.setX(width - back.width - 8);
@@ -151,8 +149,8 @@ export class CollectionScene extends Phaser.Scene {
     );
     y = this.bottom(t, 10);
 
-    const b1 = this.btn(8, y, `Pull x1  (${PULL_COST} crystal)`, () => this.doPull(1), "#b0548c");
-    const b2 = this.btn(0, y, `Pull x10  (${TEN_COST} crystal)`, () => this.doPull(10), "#b0548c");
+    const b1 = this.btn(8, y, `Pull x1  (${PULL_COST} crystal)`, () => void this.doPull(1), "#b0548c");
+    const b2 = this.btn(0, y, `Pull x10  (${TEN_COST} crystal)`, () => void this.doPull(10), "#b0548c");
     if (8 + b1.width + 8 + b2.width > width - 8) {
       y += b1.height + 6;
       b2.setPosition(8, y);
@@ -187,15 +185,27 @@ export class CollectionScene extends Phaser.Scene {
     });
   }
 
-  private doPull(n: number) {
-    const res = pull(this.state, this.defs, n, Math.random);
-    if (!res) {
-      this.say("Not enough crystals");
+  private pulling = false;
+
+  private async doPull(n: number) {
+    if (this.pulling) return;
+    if (!session().canUseServerFeatures) {
+      this.say(session().offlineMessage);
       return;
     }
+    this.pulling = true;
+    this.say("Pulling...");
+    const reply = await session().gacha(n);
+    this.pulling = false;
+    if (!this.scene.isActive()) return;
+    if (!reply.ok) {
+      this.say(reply.error === "offline" ? session().offlineMessage : reply.error === "cannot_pull" ? "Not enough crystals" : "Could not pull, try again");
+      this.render();
+      return;
+    }
+    const res = (reply.result as { pulls: PullResult[] }).pulls;
     this.lastPull = res;
     this.reveal = true;
-    saveState(this.state);
     this.render();
 
     const best = res.reduce<Rarity>((acc, p) => (RANK[p.rarity] > RANK[acc] ? p.rarity : acc), "common");
@@ -281,21 +291,24 @@ export class CollectionScene extends Phaser.Scene {
       8,
       y,
       atCap ? "Level Up  (awaken to raise cap)" : `Level Up  (${lc.coin} coin + ${lc.material} material)`,
-      () => this.doGrow(levelUp(this.state, sel.id), "level"),
+      () => this.doGrow({ type: "levelUp", id: sel.id }),
     );
     const cost = awakenCost(o.stars);
     const aw = this.btn(
       0,
       y,
       o.stars >= MAX_STARS ? "Awaken  (max)" : `Awaken  (${o.shards}/${cost} shards)`,
-      () => this.doGrow(awaken(this.state, sel.id), "awaken"),
+      () => this.doGrow({ type: "awaken", id: sel.id }),
       "#8a5a2b",
     );
     if (8 + lv.width + 8 + aw.width > width - 8) aw.setPosition(8, y + lv.height + 6);
     else aw.setPosition(8 + lv.width + 8, y);
   }
 
-  private doGrow(result: "ok" | "max" | "funds" | "shards" | "unowned", kind: "level" | "awaken") {
+  private doGrow(action: { type: "levelUp" | "awaken"; id: string }) {
+    const kind = action.type === "levelUp" ? "level" : "awaken";
+    const reply = session().act(action);
+    const result = reply.ok ? "ok" : (reply.error.split("_")[1] as "max" | "funds" | "shards" | "unowned" | undefined) ?? "funds";
     const msg: Record<string, string> = {
       ok: "Done",
       max: "Already at the limit",
@@ -303,9 +316,8 @@ export class CollectionScene extends Phaser.Scene {
       shards: "Not enough shards",
       unowned: "Not collected yet",
     };
-    this.say(msg[result]);
+    this.say(msg[result] ?? "Not possible");
     if (result === "ok") {
-      saveState(this.state);
       const { width, height } = this.scale;
       if (kind === "awaken") {
         this.fx.flash(0xfff08a, 300);
